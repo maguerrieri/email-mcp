@@ -11,6 +11,7 @@ pre-commit:
   commands:
     biome:
       glob: '*.{ts,tsx,js,jsx,json,jsonc}'
+      exclude: '*lock*'
       run: npx biome check --write {staged_files}
       stage_fixed: true
     eslint:
