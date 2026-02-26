@@ -1,13 +1,42 @@
-# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# yaml-language-server: $schema=https://goreleaser.com/static/schema-pro.json
+# ──────────────────────────────────────────────────────────────────────────────
+# email-mcp — GoReleaser configuration (modular fragment system)
+#
+# Shared (from config/goreleaser/):
+#   base.yaml                  – metadata, release.github, snapshot, checksums
+#
+# Project-specific (inline):
+#   builds                     – Skipped (Node.js/TS; Dockerfile handles build)
+#   dockers_v2                 – Dual-variant (Debian + Alpine) multi-arch images
+#   changelog                  – GitHub-generated release notes with filters
+#
+# Legacy config preserved at: .goreleaser.yaml.legacy
+# ──────────────────────────────────────────────────────────────────────────────
 version: 2
+project_name: email-mcp
 
+# ── Monorepo (GoReleaser Pro) ────────────────────────────────────────────────
+monorepo:
+  tag_prefix: email-mcp/
+  dir: services/mcp/email-mcp
+
+# ── Shared base ──────────────────────────────────────────────────────────────
+includes:
+  - from_file:
+      path: ../../../config/goreleaser/base.yaml
+
+# ── Build ────────────────────────────────────────────────────────────────────
 # No Go builds — this is a Node.js/TypeScript project.
 # The Dockerfile handles the full build pipeline (pnpm install → tsc → prune).
 builds:
   - skip: true
 
+# ── Docker images (project-specific) ────────────────────────────────────────
+# Two variants pushed to dual registries (GHCR + Docker Hub) with custom tag
+# schemes, TypeScript build-context extra_files, and OCI labels/annotations.
+# Too specific for a shared atom — kept inline.
 dockers_v2:
-  # ── Debian (slim) — default image ────────────────────────────────────────────
+  # ── Debian (slim) — default image ──────────────────────────────────────────
   - id: email-mcp-debian
     dockerfile: Dockerfile
     extra_files:
@@ -51,7 +80,7 @@ dockers_v2:
       org.opencontainers.image.licenses: LGPL-3.0-or-later
       org.opencontainers.image.created: "{{ .Date }}"
 
-  # ── Alpine — minimal image ────────────────────────────────────────────────────
+  # ── Alpine — minimal image ────────────────────────────────────────────────
   - id: email-mcp-alpine
     dockerfile: Dockerfile.alpine
     extra_files:
@@ -88,14 +117,9 @@ dockers_v2:
       org.opencontainers.image.licenses: LGPL-3.0-or-later
       org.opencontainers.image.created: "{{ .Date }}"
 
-# GitHub Release notes — npm publish and MCP registry handled by release.yml
-release:
-  github:
-    owner: codefuturist
-    name: email-mcp
-  make_latest: true
-  draft: false
-
+# ── Changelog (project-specific) ────────────────────────────────────────────
+# Uses GitHub-generated release notes (not conventional-commits).
+# npm publish and MCP registry handled by release.yml workflow.
 changelog:
   use: github
   sort: asc
