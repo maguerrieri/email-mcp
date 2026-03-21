@@ -23,7 +23,7 @@ monorepo:
 # ── Shared base ──────────────────────────────────────────────────────────────
 includes:
   - from_file:
-      path: ../../../config/goreleaser/base.yaml
+      path: config/goreleaser/base.yaml
 
 # ── Build ────────────────────────────────────────────────────────────────────
 # No Go builds — this is a Node.js/TypeScript project.
