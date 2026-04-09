@@ -47,12 +47,14 @@ function stripReplyChain(text: string): string {
 function applyBodyFormat(
   bodyText: string | undefined,
   bodyHtml: string | undefined,
-  format: 'full' | 'text' | 'stripped',
+  format: 'full' | 'text' | 'html' | 'stripped',
   maxLength?: number,
 ): string {
   let body: string;
   if (format === 'full') {
     body = bodyText ?? bodyHtml ?? '(no content)';
+  } else if (format === 'html') {
+    body = (bodyHtml ? stripHtml(bodyHtml) : undefined) ?? bodyText ?? '(no content)';
   } else {
     const base = bodyText ?? (bodyHtml ? stripHtml(bodyHtml) : undefined) ?? '(no content)';
     body = format === 'stripped' ? stripReplyChain(base) : base;
@@ -71,7 +73,8 @@ export default function registerThreadTools(server: McpServer, imapService: Imap
     'get_thread',
     'Reconstruct a full email conversation thread by following References and In-Reply-To headers. ' +
       'Returns all related messages. Does NOT mark emails as seen. ' +
-      'Use format="text" to strip HTML, or format="stripped" to also remove quoted replies. ' +
+      'Use format="text" for the plain text part, format="html" to convert the HTML part to readable text, ' +
+      'or format="stripped" to also remove quoted replies. ' +
       'Use newestFirst=true to show the most recent message in full and older messages as header-only summaries. ' +
       'Use get_email first to obtain the message_id.',
     {
@@ -79,10 +82,10 @@ export default function registerThreadTools(server: McpServer, imapService: Imap
       message_id: z.string().describe('Message-ID header value (from get_email)'),
       mailbox: z.string().default('INBOX').describe('Mailbox to search (default: INBOX)'),
       format: z
-        .enum(['full', 'text', 'stripped'])
+        .enum(['full', 'text', 'html', 'stripped'])
         .default('full')
         .describe(
-          'Body format: full=raw (default), text=plain text (strips HTML), stripped=plain text without quoted replies or signatures',
+          'Body format: full=raw (default), text=plain text part, html=HTML part converted to plain text (best for receipts/marketing), stripped=text without quoted replies or signatures',
         ),
       maxLength: z
         .number()
