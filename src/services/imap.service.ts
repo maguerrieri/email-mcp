@@ -74,6 +74,31 @@ function extractAttachments(bodyStructure: unknown): AttachmentMeta[] {
   return attachments;
 }
 
+/** Find the MIME part number for a MIME part by content type (e.g. 'text', 'html'). */
+function findMimePartByType(
+  bodyStructure: unknown,
+  targetType: string,
+  targetSubtype: string,
+): string | undefined {
+  if (!bodyStructure || typeof bodyStructure !== 'object') return undefined;
+
+  const bs = bodyStructure as Record<string, unknown>;
+
+  if (bs.type === targetType && bs.subtype === targetSubtype) {
+    return (bs.part as string) ?? undefined;
+  }
+
+  if (Array.isArray(bs.childNodes)) {
+    // eslint-disable-next-line no-restricted-syntax
+    for (const child of bs.childNodes as unknown[]) {
+      const found = findMimePartByType(child, targetType, targetSubtype);
+      if (found) return found;
+    }
+  }
+
+  return undefined;
+}
+
 /** Find the MIME part number for an attachment by filename. */
 function findMimePartByFilename(
   bodyStructure: unknown,
@@ -181,7 +206,7 @@ async function messageToEmail(
     }
   }
 
-  // Try to get text/html parts via download if body parsing was simple
+  // Try to get text/plain part via download if body parsing was simple
   try {
     const textPart = await client.download(String(uid), '1', { uid: true });
     if (textPart?.content) {
@@ -194,6 +219,26 @@ async function messageToEmail(
     }
   } catch {
     // Part may not exist
+  }
+
+  // Try to get text/html part for multipart emails (e.g. multipart/alternative)
+  if (!bodyHtml && msg.bodyStructure) {
+    const htmlPartPath = findMimePartByType(msg.bodyStructure, 'text', 'html');
+    if (htmlPartPath) {
+      try {
+        const htmlPart = await client.download(String(uid), htmlPartPath, { uid: true });
+        if (htmlPart?.content) {
+          const chunks: Buffer[] = [];
+          // eslint-disable-next-line no-restricted-syntax
+          for await (const chunk of htmlPart.content) {
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+          }
+          bodyHtml = Buffer.concat(chunks).toString('utf-8');
+        }
+      } catch {
+        // Part may not exist
+      }
+    }
   }
 
   return {

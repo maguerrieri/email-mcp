@@ -66,13 +66,14 @@ function stripReplyChain(text: string): string {
     .trim();
 }
 
-type BodyFormat = 'full' | 'text' | 'stripped';
+type BodyFormat = 'full' | 'text' | 'html' | 'stripped';
 
 /**
  * Applies the requested body format and optional character cap.
  *
  * - full:     raw bodyText ?? bodyHtml (preserves original, default)
- * - text:     prefers bodyText; converts bodyHtml to plain text if needed
+ * - text:     prefers bodyText; converts bodyHtml to plain text if bodyText is missing
+ * - html:     converts bodyHtml to plain text; falls back to bodyText if no HTML part
  * - stripped: like text, but also removes quoted reply chains and signatures
  */
 function applyBodyFormat(
@@ -85,6 +86,8 @@ function applyBodyFormat(
 
   if (format === 'full') {
     body = bodyText ?? bodyHtml ?? '(no content)';
+  } else if (format === 'html') {
+    body = (bodyHtml ? stripHtml(bodyHtml) : undefined) ?? bodyText ?? '(no content)';
   } else {
     const base = bodyText ?? (bodyHtml ? stripHtml(bodyHtml) : undefined) ?? '(no content)';
     body = format === 'stripped' ? stripReplyChain(base) : base;
@@ -190,7 +193,8 @@ export default function registerEmailsTools(server: McpServer, imapService: Imap
     'get_email',
     'Get the full content of a specific email by ID. ' +
       'Does NOT mark the email as seen (uses IMAP BODY.PEEK — non-destructive). ' +
-      'Use format="text" to strip HTML, or format="stripped" to also remove quoted replies and signatures. ' +
+      'Use format="text" for the plain text part, format="html" to convert the HTML part to readable text ' +
+      '(best for receipts and marketing emails), or format="stripped" to also remove quoted replies and signatures. ' +
       'Use maxLength to cap the body size for large emails. ' +
       'Set markRead=true only when you want to explicitly mark the email as read.',
     {
@@ -198,10 +202,10 @@ export default function registerEmailsTools(server: McpServer, imapService: Imap
       emailId: z.string().describe('Email ID from list_emails or search_emails'),
       mailbox: z.string().default('INBOX').describe('Mailbox path (default: INBOX)'),
       format: z
-        .enum(['full', 'text', 'stripped'])
+        .enum(['full', 'text', 'html', 'stripped'])
         .default('full')
         .describe(
-          'Body format: full=raw (default), text=plain text (strips HTML), stripped=plain text without quoted replies or signatures',
+          'Body format: full=raw (default), text=plain text part, html=HTML part converted to plain text (best for receipts/marketing), stripped=text without quoted replies or signatures',
         ),
       maxLength: z
         .number()
@@ -291,10 +295,10 @@ export default function registerEmailsTools(server: McpServer, imapService: Imap
         .describe('Email IDs to fetch (max 20). Obtain IDs from list_emails or search_emails.'),
       mailbox: z.string().default('INBOX').describe('Mailbox path (default: INBOX)'),
       format: z
-        .enum(['full', 'text', 'stripped'])
+        .enum(['full', 'text', 'html', 'stripped'])
         .default('text')
         .describe(
-          'Body format (default: text — strips HTML for efficient AI reading). Use stripped to also remove quoted replies.',
+          'Body format (default: text — uses text/plain part). html=HTML part converted to plain text (best for receipts/marketing). stripped=text without quoted replies.',
         ),
       maxLength: z
         .number()
