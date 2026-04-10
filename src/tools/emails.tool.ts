@@ -285,7 +285,7 @@ export default function registerEmailsTools(server: McpServer, imapService: Imap
     'Fetch the full content of multiple emails in a single call (max 20). ' +
       'More efficient than calling get_email repeatedly when triaging or summarising several emails. ' +
       'Does NOT mark emails as seen. ' +
-      'Defaults to format="text" (HTML stripped) for compact, AI-friendly output.',
+      'Defaults to format="text" (prefers text/plain part, falls back to stripping HTML) for compact, AI-friendly output.',
     {
       account: z.string().describe('Account name from list_accounts'),
       ids: z
