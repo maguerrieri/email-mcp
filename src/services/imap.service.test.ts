@@ -25,12 +25,12 @@ function createMockImapClient() {
 }
 
 /** Helper to create a readable stream from a string. */
+async function* toAsyncIterable(text: string) {
+  yield Buffer.from(text);
+}
+
 function streamFrom(text: string) {
-  return {
-    content: (async function* () {
-      yield Buffer.from(text);
-    }()),
-  };
+  return { content: toAsyncIterable(text) };
 }
 
 function createMockConnectionManager(mockClient: ReturnType<typeof createMockImapClient>) {
