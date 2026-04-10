@@ -13,12 +13,23 @@ function createMockImapClient() {
     list: vi.fn().mockResolvedValue([]),
     status: vi.fn().mockResolvedValue({ messages: 5, unseen: 2 }),
     fetch: vi.fn().mockReturnValue((async function* fetchMock() {})()),
+    fetchOne: vi.fn().mockResolvedValue(null),
+    download: vi.fn().mockResolvedValue(null),
     search: vi.fn().mockResolvedValue([]),
     messageMove: vi.fn().mockResolvedValue(true),
     messageDelete: vi.fn().mockResolvedValue(true),
     messageFlagsAdd: vi.fn().mockResolvedValue(true),
     messageFlagsRemove: vi.fn().mockResolvedValue(true),
     _releaseFn: releaseFn,
+  };
+}
+
+/** Helper to create a readable stream from a string. */
+function streamFrom(text: string) {
+  return {
+    content: (async function* () {
+      yield Buffer.from(text);
+    }()),
   };
 }
 
@@ -163,6 +174,129 @@ describe('ImapService', () => {
       await service.setFlags('test', '10', 'INBOX', 'flag');
 
       expect(client.messageFlagsAdd).toHaveBeenCalledWith('10', ['\\Flagged'], { uid: true });
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // getEmail — multipart body extraction
+  // -----------------------------------------------------------------------
+
+  describe('getEmail', () => {
+    const baseEnvelope = {
+      from: [{ name: 'Sender', address: 'sender@example.com' }],
+      to: [{ name: 'Recipient', address: 'recipient@example.com' }],
+      subject: 'Test Subject',
+      date: '2026-01-01T00:00:00Z',
+      messageId: '<msg-1@example.com>',
+    };
+
+    it('extracts HTML body from multipart/alternative via bodyStructure', async () => {
+      client.fetchOne.mockResolvedValue({
+        uid: 1,
+        envelope: baseEnvelope,
+        flags: new Set(),
+        bodyStructure: {
+          type: 'multipart',
+          subtype: 'alternative',
+          childNodes: [
+            { type: 'text', subtype: 'plain', part: '1' },
+            { type: 'text', subtype: 'html', part: '2' },
+          ],
+        },
+        source: Buffer.from('Subject: Test\r\n\r\nplain body'),
+      });
+
+      client.download
+        .mockResolvedValueOnce(streamFrom('plain text content'))
+        .mockResolvedValueOnce(streamFrom('<h1>HTML content</h1>'));
+
+      const email = await service.getEmail('test', '1', 'INBOX');
+
+      expect(email.bodyText).toBe('plain text content');
+      expect(email.bodyHtml).toBe('<h1>HTML content</h1>');
+      // First download call is for part '1' (text/plain), second for part '2' (text/html)
+      expect(client.download).toHaveBeenCalledWith('1', '2', { uid: true });
+    });
+
+    it('extracts HTML from nested multipart/mixed > multipart/alternative', async () => {
+      client.fetchOne.mockResolvedValue({
+        uid: 2,
+        envelope: baseEnvelope,
+        flags: new Set(),
+        bodyStructure: {
+          type: 'multipart',
+          subtype: 'mixed',
+          childNodes: [
+            {
+              type: 'multipart',
+              subtype: 'alternative',
+              childNodes: [
+                { type: 'text', subtype: 'plain', part: '1.1' },
+                { type: 'text', subtype: 'html', part: '1.2' },
+              ],
+            },
+            { type: 'application', subtype: 'pdf', part: '2', disposition: 'attachment' },
+          ],
+        },
+        source: Buffer.from('Subject: Test\r\n\r\nplain body'),
+      });
+
+      client.download
+        .mockResolvedValueOnce(streamFrom('plain text'))
+        .mockResolvedValueOnce(streamFrom('<p>Rich HTML</p>'));
+
+      const email = await service.getEmail('test', '2', 'INBOX');
+
+      expect(email.bodyHtml).toBe('<p>Rich HTML</p>');
+      expect(client.download).toHaveBeenCalledWith('2', '1.2', { uid: true });
+    });
+
+    it('computes part path when bodyStructure nodes lack part field', async () => {
+      client.fetchOne.mockResolvedValue({
+        uid: 3,
+        envelope: baseEnvelope,
+        flags: new Set(),
+        bodyStructure: {
+          type: 'multipart',
+          subtype: 'alternative',
+          childNodes: [
+            { type: 'text', subtype: 'plain' },
+            { type: 'text', subtype: 'html' },
+          ],
+        },
+        source: Buffer.from('Subject: Test\r\n\r\nplain body'),
+      });
+
+      client.download
+        .mockResolvedValueOnce(streamFrom('plain'))
+        .mockResolvedValueOnce(streamFrom('<b>html</b>'));
+
+      const email = await service.getEmail('test', '3', 'INBOX');
+
+      expect(email.bodyHtml).toBe('<b>html</b>');
+      // Without part fields, the path should be computed as '2' (second child)
+      expect(client.download).toHaveBeenCalledWith('3', '2', { uid: true });
+    });
+
+    it('leaves bodyHtml undefined when no text/html part exists', async () => {
+      client.fetchOne.mockResolvedValue({
+        uid: 4,
+        envelope: baseEnvelope,
+        flags: new Set(),
+        bodyStructure: {
+          type: 'text',
+          subtype: 'plain',
+          part: '1',
+        },
+        source: Buffer.from('Subject: Test\r\n\r\nplain only'),
+      });
+
+      client.download.mockResolvedValueOnce(streamFrom('just plain text'));
+
+      const email = await service.getEmail('test', '4', 'INBOX');
+
+      expect(email.bodyText).toBe('just plain text');
+      expect(email.bodyHtml).toBeUndefined();
     });
   });
 });
