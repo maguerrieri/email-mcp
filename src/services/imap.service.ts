@@ -79,19 +79,22 @@ function findMimePartByType(
   bodyStructure: unknown,
   targetType: string,
   targetSubtype: string,
+  partPath = '',
 ): string | undefined {
   if (!bodyStructure || typeof bodyStructure !== 'object') return undefined;
 
   const bs = bodyStructure as Record<string, unknown>;
+  const effectivePath = (bs.part as string) ?? partPath;
 
   if (bs.type === targetType && bs.subtype === targetSubtype) {
-    return (bs.part as string) ?? undefined;
+    return effectivePath || undefined;
   }
 
   if (Array.isArray(bs.childNodes)) {
-    // eslint-disable-next-line no-restricted-syntax
-    for (const child of bs.childNodes as unknown[]) {
-      const found = findMimePartByType(child, targetType, targetSubtype);
+    // eslint-disable-next-line no-plusplus
+    for (let i = 0; i < bs.childNodes.length; i++) {
+      const childPart = effectivePath ? `${effectivePath}.${i + 1}` : String(i + 1);
+      const found = findMimePartByType(bs.childNodes[i], targetType, targetSubtype, childPart);
       if (found) return found;
     }
   }
