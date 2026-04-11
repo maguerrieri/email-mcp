@@ -255,10 +255,7 @@ describe('ImapService', () => {
         flags: new Set(),
         bodyStructure: {
           type: 'multipart/alternative',
-          childNodes: [
-            { type: 'text/plain' },
-            { type: 'text/html' },
-          ],
+          childNodes: [{ type: 'text/plain' }, { type: 'text/html' }],
         },
         source: Buffer.from('Subject: Test\r\n\r\nplain body'),
       });
