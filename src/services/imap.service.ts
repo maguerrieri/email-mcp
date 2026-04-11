@@ -51,6 +51,15 @@ function hasAttachments(bodyStructure: unknown): boolean {
   return false;
 }
 
+/** Resolve a MIME type from a bodyStructure node, handling both ImapFlow's combined format and legacy separate fields. */
+function effectiveMimeType(bs: Record<string, unknown>): string {
+  const type = typeof bs.type === 'string' ? bs.type : '';
+  if (type.includes('/')) return type;
+  const subtype = typeof bs.subtype === 'string' ? bs.subtype : '';
+  if (type && subtype) return `${type}/${subtype}`;
+  return type || 'application/octet-stream';
+}
+
 function extractAttachments(bodyStructure: unknown): AttachmentMeta[] {
   const attachments: AttachmentMeta[] = [];
   if (!bodyStructure || typeof bodyStructure !== 'object') return attachments;
@@ -60,7 +69,7 @@ function extractAttachments(bodyStructure: unknown): AttachmentMeta[] {
     const params = (bs.dispositionParameters ?? bs.parameters ?? {}) as Record<string, string>;
     attachments.push({
       filename: params.filename ?? params.name ?? 'unnamed',
-      mimeType: (bs.type as string) ?? 'application/octet-stream',
+      mimeType: effectiveMimeType(bs),
       size: (bs.size as number) ?? 0,
     });
   }
@@ -85,7 +94,7 @@ function findMimePartByType(
   const bs = bodyStructure as Record<string, unknown>;
   const effectivePath = (bs.part as string) ?? partPath;
 
-  if (bs.type === targetMimeType) {
+  if (effectiveMimeType(bs) === targetMimeType) {
     return effectivePath || undefined;
   }
 
@@ -1788,12 +1797,11 @@ export default class ImapService {
     const s = structure as Record<string, unknown>;
     const parts: string[] = [];
 
-    const type = (s.type as string | undefined)?.toLowerCase() ?? '';
-    const subtype = (s.subtype as string | undefined)?.toLowerCase() ?? '';
+    const mime = effectiveMimeType(s).toLowerCase();
     const disposition = (s.disposition as string | undefined)?.toLowerCase() ?? '';
 
     // Check for text/calendar part
-    if (type === 'text' && subtype === 'calendar') {
+    if (mime === 'text/calendar') {
       const partId = s.part as string | undefined;
       if (partId) parts.push(partId);
       else if (prefix) parts.push(prefix);
