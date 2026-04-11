@@ -60,7 +60,7 @@ function extractAttachments(bodyStructure: unknown): AttachmentMeta[] {
     const params = (bs.dispositionParameters ?? bs.parameters ?? {}) as Record<string, string>;
     attachments.push({
       filename: params.filename ?? params.name ?? 'unnamed',
-      mimeType: `${bs.type ?? 'application'}/${bs.subtype ?? 'octet-stream'}`,
+      mimeType: (bs.type as string) ?? 'application/octet-stream',
       size: (bs.size as number) ?? 0,
     });
   }
@@ -74,11 +74,10 @@ function extractAttachments(bodyStructure: unknown): AttachmentMeta[] {
   return attachments;
 }
 
-/** Find the MIME part number for a MIME part by content type (e.g. 'text', 'html'). */
+/** Find the MIME part number for a MIME part by content type (e.g. 'text/html'). */
 function findMimePartByType(
   bodyStructure: unknown,
-  targetType: string,
-  targetSubtype: string,
+  targetMimeType: string,
   partPath = '',
 ): string | undefined {
   if (!bodyStructure || typeof bodyStructure !== 'object') return undefined;
@@ -86,7 +85,7 @@ function findMimePartByType(
   const bs = bodyStructure as Record<string, unknown>;
   const effectivePath = (bs.part as string) ?? partPath;
 
-  if (bs.type === targetType && bs.subtype === targetSubtype) {
+  if (bs.type === targetMimeType) {
     return effectivePath || undefined;
   }
 
@@ -94,7 +93,7 @@ function findMimePartByType(
     // eslint-disable-next-line no-plusplus
     for (let i = 0; i < bs.childNodes.length; i++) {
       const childPart = effectivePath ? `${effectivePath}.${i + 1}` : String(i + 1);
-      const found = findMimePartByType(bs.childNodes[i], targetType, targetSubtype, childPart);
+      const found = findMimePartByType(bs.childNodes[i], targetMimeType, childPart);
       if (found) return found;
     }
   }
@@ -226,7 +225,7 @@ async function messageToEmail(
 
   // Try to get text/html part for multipart emails (e.g. multipart/alternative)
   if (!bodyHtml && msg.bodyStructure) {
-    const htmlPartPath = findMimePartByType(msg.bodyStructure, 'text', 'html');
+    const htmlPartPath = findMimePartByType(msg.bodyStructure, 'text/html');
     if (htmlPartPath) {
       try {
         const htmlPart = await client.download(String(uid), htmlPartPath, { uid: true });

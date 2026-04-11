@@ -196,11 +196,10 @@ describe('ImapService', () => {
         envelope: baseEnvelope,
         flags: new Set(),
         bodyStructure: {
-          type: 'multipart',
-          subtype: 'alternative',
+          type: 'multipart/alternative',
           childNodes: [
-            { type: 'text', subtype: 'plain', part: '1' },
-            { type: 'text', subtype: 'html', part: '2' },
+            { type: 'text/plain', part: '1' },
+            { type: 'text/html', part: '2' },
           ],
         },
         source: Buffer.from('Subject: Test\r\n\r\nplain body'),
@@ -224,18 +223,16 @@ describe('ImapService', () => {
         envelope: baseEnvelope,
         flags: new Set(),
         bodyStructure: {
-          type: 'multipart',
-          subtype: 'mixed',
+          type: 'multipart/mixed',
           childNodes: [
             {
-              type: 'multipart',
-              subtype: 'alternative',
+              type: 'multipart/alternative',
               childNodes: [
-                { type: 'text', subtype: 'plain', part: '1.1' },
-                { type: 'text', subtype: 'html', part: '1.2' },
+                { type: 'text/plain', part: '1.1' },
+                { type: 'text/html', part: '1.2' },
               ],
             },
-            { type: 'application', subtype: 'pdf', part: '2', disposition: 'attachment' },
+            { type: 'application/pdf', part: '2', disposition: 'attachment' },
           ],
         },
         source: Buffer.from('Subject: Test\r\n\r\nplain body'),
@@ -257,11 +254,10 @@ describe('ImapService', () => {
         envelope: baseEnvelope,
         flags: new Set(),
         bodyStructure: {
-          type: 'multipart',
-          subtype: 'alternative',
+          type: 'multipart/alternative',
           childNodes: [
-            { type: 'text', subtype: 'plain' },
-            { type: 'text', subtype: 'html' },
+            { type: 'text/plain' },
+            { type: 'text/html' },
           ],
         },
         source: Buffer.from('Subject: Test\r\n\r\nplain body'),
@@ -284,8 +280,7 @@ describe('ImapService', () => {
         envelope: baseEnvelope,
         flags: new Set(),
         bodyStructure: {
-          type: 'text',
-          subtype: 'plain',
+          type: 'text/plain',
           part: '1',
         },
         source: Buffer.from('Subject: Test\r\n\r\nplain only'),
