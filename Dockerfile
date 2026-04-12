@@ -8,7 +8,7 @@ RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 # Install dependencies (layer cached unless lock changes)
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Build TypeScript
 COPY tsconfig.json tsconfig.build.json ./
