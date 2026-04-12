@@ -19,6 +19,7 @@ import type WatcherService from '../services/watcher.service.js';
 import type { AppConfig } from '../types/index.js';
 import registerAccountsTools from './accounts.tool.js';
 import registerAnalyticsTools from './analytics.tool.js';
+import registerArchiveTools from './archive.tool.js';
 import registerAttachmentTools from './attachments.tool.js';
 import registerBulkTools from './bulk.tool.js';
 import registerCalendarTools from './calendar.tool.js';
@@ -77,6 +78,7 @@ export default function registerAllTools(
   if (!readOnly) {
     registerSendTools(server, smtpService);
     registerManageTools(server, imapService);
+    registerArchiveTools(server, imapService);
     registerLabelTools(server, imapService);
     registerBulkTools(server, imapService);
     registerDraftTools(server, imapService, smtpService);
