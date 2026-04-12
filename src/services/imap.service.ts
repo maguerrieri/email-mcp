@@ -1058,6 +1058,47 @@ export default class ImapService {
   }
 
   // -------------------------------------------------------------------------
+  // Archive
+  // -------------------------------------------------------------------------
+
+  async archiveEmails(accountName: string, ids: number[], mailbox: string): Promise<BulkResult> {
+    const client = await this.connections.getImapClient(accountName);
+    const safeMailbox = sanitizeMailboxName(mailbox);
+    await ImapService.assertRealMailbox(client, safeMailbox);
+
+    const mailboxes = await client.list();
+    const archive = mailboxes.find((mb) => mb.specialUse === '\\Archive');
+    const archivePath = archive?.path ?? 'Archive';
+
+    const result: BulkResult = {
+      total: ids.length,
+      succeeded: 0,
+      failed: 0,
+      errors: [],
+    };
+
+    const lock = await client.getMailboxLock(safeMailbox);
+    try {
+      const range = ids.join(',');
+      const ok = await client.messageMove(range, archivePath, { uid: true });
+      if (ok) {
+        result.succeeded = ids.length;
+      } else {
+        result.failed = ids.length;
+        result.errors = ['IMAP server rejected the move to Archive.'];
+      }
+    } catch (err) {
+      result.failed = ids.length;
+      result.errors = [err instanceof Error ? err.message : String(err)];
+    } finally {
+      lock.release();
+    }
+
+    if (result.errors?.length === 0) delete result.errors;
+    return result;
+  }
+
+  // -------------------------------------------------------------------------
   // Draft management
   // -------------------------------------------------------------------------
 
