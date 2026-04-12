@@ -57,7 +57,8 @@ function effectiveMimeType(bs: Record<string, unknown>): string {
   if (type.includes('/')) return type;
   const subtype = typeof bs.subtype === 'string' ? bs.subtype : '';
   if (type && subtype) return `${type}/${subtype}`;
-  return type || 'application/octet-stream';
+  if (type) return `${type}/octet-stream`;
+  return 'application/octet-stream';
 }
 
 function extractAttachments(bodyStructure: unknown): AttachmentMeta[] {
