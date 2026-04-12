@@ -40,7 +40,7 @@ src/
 - Operations use mailbox locks (`client.getMailboxLock()`) for concurrency safety
 - Special-use mailbox resolution: `mailboxes.find(mb => mb.specialUse === '\\Archive')` etc.
 - Virtual folders (`\All`, `\Flagged`) are rejected via `assertRealMailbox()`
-- Message IDs are IMAP UIDs (integers), passed as strings in tool interfaces
+- Message IDs are IMAP UIDs (integers); single-message tools accept string IDs, bulk tools accept numeric UID arrays
 
 ### Bulk Operations
 - `BulkResult` type: `{ total, succeeded, failed, errors? }`

@@ -152,6 +152,68 @@ describe('ImapService', () => {
   });
 
   // -----------------------------------------------------------------------
+  // archiveEmails
+  // -----------------------------------------------------------------------
+
+  describe('archiveEmails', () => {
+    it('resolves archive mailbox via specialUse and moves emails', async () => {
+      client.list.mockResolvedValue([
+        { name: 'INBOX', path: 'INBOX', specialUse: '\\Inbox' },
+        { name: 'Archive', path: 'Archive', specialUse: '\\Archive' },
+      ]);
+
+      const result = await service.archiveEmails('test', [1, 2, 3], 'INBOX');
+
+      expect(result.succeeded).toBe(3);
+      expect(result.failed).toBe(0);
+      expect(client.messageMove).toHaveBeenCalledWith('1,2,3', 'Archive', { uid: true });
+      expect(client._releaseFn).toHaveBeenCalled();
+    });
+
+    it('falls back to "Archive" when no specialUse mailbox exists', async () => {
+      client.list.mockResolvedValue([{ name: 'INBOX', path: 'INBOX', specialUse: '\\Inbox' }]);
+
+      await service.archiveEmails('test', [10], 'INBOX');
+
+      expect(client.messageMove).toHaveBeenCalledWith('10', 'Archive', { uid: true });
+    });
+
+    it('uses provider-specific archive path from specialUse', async () => {
+      client.list.mockResolvedValue([
+        { name: 'INBOX', path: 'INBOX', specialUse: '\\Inbox' },
+        { name: 'All Mail', path: '[Gmail]/All Mail', specialUse: '\\Archive' },
+      ]);
+
+      await service.archiveEmails('test', [5], 'INBOX');
+
+      expect(client.messageMove).toHaveBeenCalledWith('5', '[Gmail]/All Mail', { uid: true });
+    });
+
+    it('reports failure when messageMove is rejected', async () => {
+      client.list.mockResolvedValue([{ name: 'INBOX', path: 'INBOX', specialUse: '\\Inbox' }]);
+      client.messageMove.mockResolvedValue(false);
+
+      const result = await service.archiveEmails('test', [1, 2], 'INBOX');
+
+      expect(result.succeeded).toBe(0);
+      expect(result.failed).toBe(2);
+      expect(result.errors).toEqual(['IMAP server rejected the move to Archive.']);
+      expect(client._releaseFn).toHaveBeenCalled();
+    });
+
+    it('releases lock on error', async () => {
+      client.list.mockResolvedValue([{ name: 'INBOX', path: 'INBOX', specialUse: '\\Inbox' }]);
+      client.messageMove.mockRejectedValue(new Error('Connection lost'));
+
+      const result = await service.archiveEmails('test', [1], 'INBOX');
+
+      expect(result.failed).toBe(1);
+      expect(result.errors).toEqual(['Connection lost']);
+      expect(client._releaseFn).toHaveBeenCalled();
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // setFlags
   // -----------------------------------------------------------------------
 

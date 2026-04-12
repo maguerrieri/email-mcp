@@ -26,7 +26,7 @@ export default function registerArchiveTools(server: McpServer, imapService: Ima
           'Array of email UIDs to archive (max 100). Get UIDs from list_emails or search_emails.',
         ),
     },
-    { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     async ({ account, mailbox, ids }) => {
       try {
         const result = await imapService.archiveEmails(account, ids, mailbox);
