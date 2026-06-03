@@ -113,12 +113,17 @@ export default class ConnectionManager implements IConnectionManager {
     });
 
     await client.connect();
+    // Cache the connected client before any further await. The 'error' handler
+    // above only evicts what's in the pool, so if it isn't registered until
+    // after the mcpLog() await, a socket reset in that window would be missed
+    // and the dead client cached. Setting it synchronously after connect()
+    // closes that race — no event-loop turn can interleave.
+    this.imapClients.set(accountName, client);
     await mcpLog(
       'info',
       'imap',
       `Connected to ${account.imap.host}:${account.imap.port} for "${accountName}"`,
     );
-    this.imapClients.set(accountName, client);
     return client;
   }
 
