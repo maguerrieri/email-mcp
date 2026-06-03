@@ -96,13 +96,34 @@ export default class ConnectionManager implements IConnectionManager {
       logger: false,
     });
 
+    // ImapFlow is an EventEmitter: an 'error' event with no listener is re-thrown
+    // by Node and crashes the whole process. Pooled clients are reused across tool
+    // calls and sit idle in between, so the server eventually resets the idle TLS
+    // socket ('write ECONNRESET') and ImapFlow emits 'error'. Swallow it, log it,
+    // and evict the dead client from the pool — with no cached entry, the next
+    // getImapClient() falls through and reconnects.
+    client.on('error', (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      mcpLog('warning', 'imap', `IMAP connection error for "${accountName}": ${message}`).catch(
+        () => {},
+      );
+      if (this.imapClients.get(accountName) === client) {
+        this.imapClients.delete(accountName);
+      }
+    });
+
     await client.connect();
+    // Cache the connected client before any further await. The 'error' handler
+    // above only evicts what's in the pool, so if it isn't registered until
+    // after the mcpLog() await, a socket reset in that window would be missed
+    // and the dead client cached. Setting it synchronously after connect()
+    // closes that race — no event-loop turn can interleave.
+    this.imapClients.set(accountName, client);
     await mcpLog(
       'info',
       'imap',
       `Connected to ${account.imap.host}:${account.imap.port} for "${accountName}"`,
     );
-    this.imapClients.set(accountName, client);
     return client;
   }
 
@@ -224,6 +245,10 @@ export default class ConnectionManager implements IConnectionManager {
         auth,
         logger: false,
       });
+      // Prevent an out-of-band socket 'error' (which bypasses try/catch) from
+      // crashing the process during the test; failures still surface via the
+      // awaited connect()/list()/status() rejections below.
+      client.on('error', () => {});
       await client.connect();
 
       const mailboxes = await client.list();
