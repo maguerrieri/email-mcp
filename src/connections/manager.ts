@@ -96,6 +96,22 @@ export default class ConnectionManager implements IConnectionManager {
       logger: false,
     });
 
+    // ImapFlow is an EventEmitter: an 'error' event with no listener is re-thrown
+    // by Node and crashes the whole process. Pooled clients are reused across tool
+    // calls and sit idle in between, so the server eventually resets the idle TLS
+    // socket ('write ECONNRESET') and ImapFlow emits 'error'. Swallow it, log it,
+    // and drop the dead client — the next getImapClient() reconnects because the
+    // cached client's `usable` getter is now false.
+    client.on('error', (err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      mcpLog('warning', 'imap', `IMAP connection error for "${accountName}": ${message}`).catch(
+        () => {},
+      );
+      if (this.imapClients.get(accountName) === client) {
+        this.imapClients.delete(accountName);
+      }
+    });
+
     await client.connect();
     await mcpLog(
       'info',
@@ -224,6 +240,10 @@ export default class ConnectionManager implements IConnectionManager {
         auth,
         logger: false,
       });
+      // Prevent an out-of-band socket 'error' (which bypasses try/catch) from
+      // crashing the process during the test; failures still surface via the
+      // awaited connect()/list()/status() rejections below.
+      client.on('error', () => {});
       await client.connect();
 
       const mailboxes = await client.list();
