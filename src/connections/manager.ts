@@ -100,8 +100,8 @@ export default class ConnectionManager implements IConnectionManager {
     // by Node and crashes the whole process. Pooled clients are reused across tool
     // calls and sit idle in between, so the server eventually resets the idle TLS
     // socket ('write ECONNRESET') and ImapFlow emits 'error'. Swallow it, log it,
-    // and drop the dead client — the next getImapClient() reconnects because the
-    // cached client's `usable` getter is now false.
+    // and evict the dead client from the pool — with no cached entry, the next
+    // getImapClient() falls through and reconnects.
     client.on('error', (err: unknown) => {
       const message = err instanceof Error ? err.message : String(err);
       mcpLog('warning', 'imap', `IMAP connection error for "${accountName}": ${message}`).catch(
