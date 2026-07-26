@@ -267,6 +267,56 @@ async function messageToEmail(
   };
 }
 
+/**
+ * Pages an unfiltered mailbox listing by sequence number.
+ *
+ * Messages are appended in arrival order, so the newest live at the highest
+ * sequence numbers — page 1 is the tail of the mailbox. `exists` is the
+ * authoritative message count from SELECT, which keeps `total` consistent with
+ * list_mailboxes and makes each page return min(remaining, pageSize) rows.
+ * Caller must hold the mailbox lock.
+ */
+async function listEmailsBySequence(
+  client: ImapFlow,
+  exists: number,
+  page: number,
+  pageSize: number,
+): Promise<PaginatedResult<EmailMeta>> {
+  const total = exists;
+  const start = (page - 1) * pageSize;
+
+  if (total === 0 || start >= total) {
+    return { items: [], total, page, pageSize, hasMore: false };
+  }
+
+  // Newest first: walk down from the highest sequence number.
+  const seqEnd = total - start;
+  const seqStart = Math.max(1, seqEnd - pageSize + 1);
+
+  const items: EmailMeta[] = [];
+  // eslint-disable-next-line no-restricted-syntax
+  for await (const msg of client.fetch(`${seqStart}:${seqEnd}`, {
+    uid: true,
+    envelope: true,
+    flags: true,
+    bodyStructure: true,
+    source: { start: 0, maxLength: 256 },
+  })) {
+    items.push(messageToEmailMeta(msg as unknown as Record<string, unknown>));
+  }
+
+  // Sort by date descending
+  items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  return {
+    items,
+    total,
+    page,
+    pageSize,
+    hasMore: start + pageSize < total,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
@@ -374,6 +424,23 @@ export default class ImapService {
       if (options.seen !== undefined) search.seen = options.seen;
       if (options.flagged !== undefined) search.flagged = options.flagged;
       if (options.answered !== undefined) search.answered = options.answered;
+
+      // Unfiltered listing: page over the mailbox by sequence number instead of
+      // deriving the window from `UID SEARCH ALL`.
+      //
+      // Some servers (notably iCloud, on INBOX) answer `UID SEARCH ALL` with a
+      // UID set far larger than the mailbox — we've seen 100020 UIDs for a
+      // 71-message INBOX. That inflates `total` and the page count, and pages
+      // come back short because most of those UIDs cannot be fetched. `exists`
+      // from SELECT is authoritative and is the same number list_mailboxes
+      // reports, so use it whenever there is nothing to filter on.
+      //
+      // Filtered listings still go through SEARCH below — that path is correct.
+      const noFilters = Object.keys(search).length === 0 && options.hasAttachment === undefined;
+      const mb = client.mailbox;
+      if (noFilters && mb && typeof mb === 'object' && typeof mb.exists === 'number') {
+        return await listEmailsBySequence(client, mb.exists, page, pageSize);
+      }
 
       // Search for matching UIDs
       const searchResult = await client.search(search, { uid: true });

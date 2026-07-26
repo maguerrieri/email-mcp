@@ -9,6 +9,8 @@ function createMockImapClient() {
   const releaseFn = vi.fn();
   return {
     usable: true,
+    // Populated by SELECT on a real client; null until a mailbox is seeded.
+    mailbox: null as null | { path: string; exists: number },
     getMailboxLock: vi.fn().mockResolvedValue({ release: releaseFn }),
     list: vi.fn().mockResolvedValue([]),
     status: vi.fn().mockResolvedValue({ messages: 5, unseen: 2 }),
@@ -94,6 +96,147 @@ describe('ImapService', () => {
         unseenMessages: 3,
       });
       expect(client.status).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // listEmails
+  // -----------------------------------------------------------------------
+
+  describe('listEmails', () => {
+    /**
+     * Seeds a mailbox of `count` messages and wires the mock client to serve
+     * sequence-number fetches from it, the way a real server does after SELECT.
+     */
+    function seedMailbox(count: number) {
+      client.mailbox = { path: 'INBOX', exists: count };
+
+      const messages = Array.from({ length: count }, (_, i) => ({
+        seq: i + 1,
+        uid: 1000 + i,
+        flags: ['\\Seen'],
+        envelope: {
+          subject: `Message ${i + 1}`,
+          from: [{ name: 'Sender', address: 'sender@example.com' }],
+          // Later sequence numbers are newer, as with real arrival order.
+          date: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
+        },
+      }));
+
+      client.fetch.mockImplementation((range: unknown) => {
+        const [from, to] = String(range).split(':').map(Number);
+        const slice = messages.filter((m) => m.seq >= from && m.seq <= to);
+        async function* fetchRange() {
+          for (const m of slice) yield m;
+        }
+        return fetchRange();
+      });
+
+      return messages;
+    }
+
+    it('reports the mailbox message count, not an inflated UID SEARCH result', async () => {
+      seedMailbox(71);
+      // iCloud answers `UID SEARCH ALL` on INBOX with a UID set far larger than
+      // the mailbox (100020 UIDs for 71 messages), which used to become `total`.
+      client.search.mockResolvedValue(Array.from({ length: 100020 }, (_, i) => 57746 + i));
+
+      const result = await service.listEmails('test', { mailbox: 'INBOX', pageSize: 100 });
+
+      expect(result.total).toBe(71);
+      expect(result.items).toHaveLength(71);
+      expect(result.hasMore).toBe(false);
+      // The unfiltered path must not depend on SEARCH at all.
+      expect(client.search).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      { count: 71, pageSize: 100, expected: 71 },
+      { count: 71, pageSize: 20, expected: 20 },
+      { count: 5, pageSize: 20, expected: 5 },
+      { count: 1, pageSize: 1, expected: 1 },
+    ])('with no filters returns min(N, pageSize) rows for N=$count pageSize=$pageSize', async ({
+      count,
+      pageSize,
+      expected,
+    }) => {
+      seedMailbox(count);
+
+      const result = await service.listEmails('test', { mailbox: 'INBOX', pageSize });
+
+      expect(result.total).toBe(count);
+      expect(result.items).toHaveLength(expected);
+    });
+
+    it('returns newest messages first on page 1', async () => {
+      seedMailbox(71);
+
+      const result = await service.listEmails('test', { mailbox: 'INBOX', pageSize: 20 });
+
+      // Sequence 71 is the newest message; its UID is 1000 + 70.
+      expect(result.items[0].id).toBe('1070');
+      expect(result.items).toHaveLength(20);
+      expect(result.hasMore).toBe(true);
+    });
+
+    it('pages through to the final partial page', async () => {
+      seedMailbox(71);
+
+      const result = await service.listEmails('test', { mailbox: 'INBOX', page: 2, pageSize: 50 });
+
+      expect(result.total).toBe(71);
+      expect(result.items).toHaveLength(21);
+      expect(result.hasMore).toBe(false);
+    });
+
+    it('returns an empty page past the end without claiming more pages', async () => {
+      seedMailbox(71);
+
+      const result = await service.listEmails('test', {
+        mailbox: 'INBOX',
+        page: 99,
+        pageSize: 100,
+      });
+
+      expect(result.total).toBe(71);
+      expect(result.items).toHaveLength(0);
+      expect(result.hasMore).toBe(false);
+    });
+
+    it('handles an empty mailbox', async () => {
+      seedMailbox(0);
+
+      const result = await service.listEmails('test', { mailbox: 'INBOX' });
+
+      expect(result.total).toBe(0);
+      expect(result.items).toHaveLength(0);
+      expect(result.hasMore).toBe(false);
+    });
+
+    it('still derives the total from SEARCH when a filter is given', async () => {
+      seedMailbox(71);
+      client.search.mockResolvedValue([1001, 1002, 1003]);
+
+      const result = await service.listEmails('test', {
+        mailbox: 'INBOX',
+        since: '2026-07-16',
+        pageSize: 100,
+      });
+
+      expect(client.search).toHaveBeenCalledWith(
+        expect.objectContaining({ since: new Date('2026-07-16') }),
+        { uid: true },
+      );
+      expect(result.total).toBe(3);
+    });
+
+    it('treats has_attachment as a filter rather than an unfiltered listing', async () => {
+      seedMailbox(71);
+      client.search.mockResolvedValue([1001, 1002]);
+
+      await service.listEmails('test', { mailbox: 'INBOX', hasAttachment: true });
+
+      expect(client.search).toHaveBeenCalled();
     });
   });
 
