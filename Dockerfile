@@ -15,8 +15,11 @@ COPY tsconfig.json tsconfig.build.json ./
 COPY src/ src/
 RUN pnpm build
 
-# Remove dev dependencies
-RUN pnpm prune --prod
+# Remove dev dependencies.
+# --ignore-scripts because prune re-runs the `prepare` lifecycle script, which
+# builds via tsc — and tsc is a dev dependency being pruned. The build already
+# ran above, so there is nothing for prepare to do here.
+RUN pnpm prune --prod --ignore-scripts
 
 # ── Production stage ──────────────────────────────────────────────────────────
 FROM node:24-slim AS production
