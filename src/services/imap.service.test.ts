@@ -106,7 +106,13 @@ describe('ImapService', () => {
   describe('listEmails', () => {
     /**
      * Seeds a mailbox of `count` messages and wires the mock client to serve
-     * sequence-number fetches from it, the way a real server does after SELECT.
+     * fetches from it, the way a real server does after SELECT.
+     *
+     * Honours both addressing modes so each path is actually exercised: the
+     * unfiltered path fetches a sequence range (`"52:71"`, no `uid` option),
+     * while the filtered path fetches a comma-separated UID set
+     * (`"1003,1002"`, `{ uid: true }`). A mock that only understood one form
+     * would let the other path regress to zero rows unnoticed.
      */
     function seedMailbox(count: number) {
       client.mailbox = { path: 'INBOX', exists: count };
@@ -123,14 +129,25 @@ describe('ImapService', () => {
         },
       }));
 
-      client.fetch.mockImplementation((range: unknown) => {
-        const [from, to] = String(range).split(':').map(Number);
-        const slice = messages.filter((m) => m.seq >= from && m.seq <= to);
-        async function* fetchRange() {
-          for (const m of slice) yield m;
-        }
-        return fetchRange();
-      });
+      client.fetch.mockImplementation(
+        (range: unknown, _query: unknown, opts?: { uid?: boolean }) => {
+          const spec = String(range);
+          let slice: typeof messages;
+
+          if (opts?.uid) {
+            const wanted = new Set(spec.split(',').map(Number));
+            slice = messages.filter((m) => wanted.has(m.uid));
+          } else {
+            const [from, to] = spec.split(':').map(Number);
+            slice = messages.filter((m) => m.seq >= from && m.seq <= to);
+          }
+
+          async function* fetchRange() {
+            for (const m of slice) yield m;
+          }
+          return fetchRange();
+        },
+      );
 
       return messages;
     }
@@ -228,15 +245,25 @@ describe('ImapService', () => {
         { uid: true },
       );
       expect(result.total).toBe(3);
+      // Rows too, not just the total — otherwise this passes even if the
+      // filtered fetch regresses to returning nothing.
+      expect(result.items).toHaveLength(3);
+      expect(result.items.map((i) => i.id).sort()).toEqual(['1001', '1002', '1003']);
     });
 
     it('treats has_attachment as a filter rather than an unfiltered listing', async () => {
       seedMailbox(71);
       client.search.mockResolvedValue([1001, 1002]);
 
-      await service.listEmails('test', { mailbox: 'INBOX', hasAttachment: true });
+      // Seeded messages carry no bodyStructure, so they all match hasAttachment=false.
+      const result = await service.listEmails('test', {
+        mailbox: 'INBOX',
+        hasAttachment: false,
+      });
 
       expect(client.search).toHaveBeenCalled();
+      expect(result.total).toBe(2);
+      expect(result.items).toHaveLength(2);
     });
   });
 
