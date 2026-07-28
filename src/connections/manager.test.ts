@@ -1,9 +1,8 @@
 import type { EventEmitter } from 'node:events';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-import ConnectionManager from './manager.js';
 import type { AccountConfig } from '../types/index.js';
+import ConnectionManager from './manager.js';
 
 // ---------------------------------------------------------------------------
 // Controllable ImapFlow mock — a real EventEmitter exposing only the surface
