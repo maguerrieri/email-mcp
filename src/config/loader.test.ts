@@ -38,6 +38,7 @@ describe('Config Loader', () => {
       'MCP_EMAIL_IMAP_HOST',
       'MCP_EMAIL_SMTP_HOST',
       'MCP_EMAIL_READ_ONLY',
+      'MCP_EMAIL_SCHEDULER_ENABLED',
       'MCP_EMAIL_ACCOUNT_NAME',
     ]) {
       savedEnv[key] = process.env[key];
@@ -130,8 +131,22 @@ read_only = true
       expect(config.settings.readOnly).toBe(false);
       expect(config.settings.watcher.enabled).toBe(false);
       expect(config.settings.watcher.folders).toEqual(['INBOX']);
+      expect(config.settings.scheduler.enabled).toBe(true);
       expect(config.settings.hooks.onNewEmail).toBe('notify');
       expect(config.settings.hooks.preset).toBe('priority-focus');
+    });
+
+    it('reads [settings.scheduler] enabled', async () => {
+      const toml = `${MINIMAL_TOML}
+[settings.scheduler]
+enabled = false
+`;
+      const configPath = path.join(tmpDir, 'config.toml');
+      await fs.writeFile(configPath, toml, 'utf-8');
+
+      const config = await loadConfig(configPath);
+
+      expect(config.settings.scheduler.enabled).toBe(false);
     });
   });
 
@@ -164,6 +179,20 @@ read_only = true
       const config = await loadConfig(path.join(tmpDir, 'nonexistent.toml'));
 
       expect(config.settings.readOnly).toBe(true);
+    });
+
+    it('reads the scheduler switch from MCP_EMAIL_SCHEDULER_ENABLED', async () => {
+      process.env.MCP_EMAIL_ADDRESS = 'env@example.com';
+      process.env.MCP_EMAIL_PASSWORD = 'env-pass';
+      process.env.MCP_EMAIL_IMAP_HOST = 'imap.env.com';
+      process.env.MCP_EMAIL_SMTP_HOST = 'smtp.env.com';
+
+      const unset = await loadConfig(path.join(tmpDir, 'nonexistent.toml'));
+      expect(unset.settings.scheduler.enabled).toBe(true);
+
+      process.env.MCP_EMAIL_SCHEDULER_ENABLED = 'false';
+      const disabled = await loadConfig(path.join(tmpDir, 'nonexistent.toml'));
+      expect(disabled.settings.scheduler.enabled).toBe(false);
     });
   });
 

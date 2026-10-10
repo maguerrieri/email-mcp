@@ -54,6 +54,9 @@ function loadFromEnv(): RawAppConfig | null {
           .filter(Boolean),
         idle_timeout: parseInt(process.env.MCP_EMAIL_WATCHER_IDLE_TIMEOUT ?? '1740', 10),
       },
+      scheduler: {
+        enabled: process.env.MCP_EMAIL_SCHEDULER_ENABLED !== 'false',
+      },
       hooks: {
         on_new_email:
           (process.env.MCP_EMAIL_HOOK_ON_NEW_EMAIL as 'triage' | 'notify' | 'none') ?? 'notify',
@@ -215,6 +218,9 @@ function normalizeConfig(raw: RawAppConfig): AppConfig {
         folders: raw.settings.watcher.folders,
         idleTimeout: raw.settings.watcher.idle_timeout,
       },
+      scheduler: {
+        enabled: raw.settings.scheduler.enabled,
+      },
       hooks: {
         onNewEmail: raw.settings.hooks.on_new_email,
         preset: raw.settings.hooks.preset,
@@ -314,6 +320,10 @@ read_only = false  # set to true to disable all write operations
 # enabled = false        # enable IMAP IDLE real-time monitoring
 # folders = ["INBOX"]    # folders to watch per account
 # idle_timeout = 1740    # seconds (29 min, IMAP max is 30)
+
+# [settings.scheduler]
+# enabled = true         # false drops schedule_email, list_scheduled, cancel_scheduled
+#                        # and email://scheduled (for hosts that don't keep the server running)
 
 # [settings.hooks]
 # on_new_email = "notify"  # "triage" (AI) | "notify" (log) | "none"

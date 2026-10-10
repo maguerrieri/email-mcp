@@ -441,6 +441,7 @@ For single-account setups (overrides config file):
 | `MCP_EMAIL_SMTP_POOL_MAX_CONNECTIONS` | `1` | Max pooled SMTP connections |
 | `MCP_EMAIL_SMTP_POOL_MAX_MESSAGES` | `100` | Max messages per pooled connection |
 | `MCP_EMAIL_RATE_LIMIT` | `10` | Max sends per minute |
+| `MCP_EMAIL_SCHEDULER_ENABLED` | `true` | `false` turns off email scheduling (see [Disabling the scheduler](#disabling-the-scheduler)) |
 
 ### Email Scheduling
 
@@ -476,6 +477,17 @@ email-mcp scheduler uninstall
 ```
 
 Scheduled emails are stored as JSON files in `~/.local/state/email-mcp/scheduled/` with status-based locking. Each entry tracks attempts (max 3) and the last error, so you can inspect failures with `scheduler list`.
+
+#### Disabling the scheduler
+
+Scheduling assumes the queue directory and a process to send from both outlive the call that queued the email. On a host that runs the server only while requests come in, such as a scale-to-zero container whose filesystem goes with the instance, an email can go out late or never, while `schedule_email` still reports `scheduled`. Turn scheduling off there:
+
+```toml
+[settings.scheduler]
+enabled = false
+```
+
+(or `MCP_EMAIL_SCHEDULER_ENABLED=false` with environment-variable config). The server then doesn't register `schedule_email`, `list_scheduled`, `cancel_scheduled` or the `email://scheduled` resource, and doesn't run the startup check or the 60-second timer. The `email-mcp scheduler` CLI commands are unaffected.
 
 ### Real-time Watcher & AI Hooks
 

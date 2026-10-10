@@ -38,12 +38,13 @@ import registerSchedulerTools from './scheduler.tool.js';
 import registerSendTools from './send.tool.js';
 import { registerTemplateWriteTools } from './templates.tool.js';
 
-function createConfig(readOnly: boolean): AppConfig {
+function createConfig(readOnly: boolean, schedulerEnabled = true): AppConfig {
   return {
     settings: {
       rateLimit: 10,
       readOnly,
       watcher: { enabled: false, folders: ['INBOX'], idleTimeout: 1740 },
+      scheduler: { enabled: schedulerEnabled },
       hooks: {
         onNewEmail: 'notify',
         preset: 'priority-focus',
@@ -64,26 +65,30 @@ function createConfig(readOnly: boolean): AppConfig {
   };
 }
 
+function register(config: AppConfig): void {
+  registerAllTools(
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    config,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+    {} as never,
+  );
+}
+
 describe('registerAllTools', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('registers all tools when readOnly is false', () => {
-    registerAllTools(
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      createConfig(false),
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-    );
+    register(createConfig(false));
     // Read tools should always be registered
     expect(registerAccountsTools).toHaveBeenCalled();
     expect(registerEmailsTools).toHaveBeenCalled();
@@ -100,20 +105,7 @@ describe('registerAllTools', () => {
   });
 
   it('skips write tools when readOnly is true', () => {
-    registerAllTools(
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      createConfig(true),
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-      {} as never,
-    );
+    register(createConfig(true));
     // Read tools should still be registered
     expect(registerAccountsTools).toHaveBeenCalled();
     expect(registerEmailsTools).toHaveBeenCalled();
@@ -127,5 +119,19 @@ describe('registerAllTools', () => {
     expect(registerFolderTools).not.toHaveBeenCalled();
     expect(registerTemplateWriteTools).not.toHaveBeenCalled();
     expect(registerSchedulerTools).not.toHaveBeenCalled();
+  });
+
+  it('skips only the scheduler tools when the scheduler is disabled', () => {
+    register(createConfig(false, false));
+    expect(registerSchedulerTools).not.toHaveBeenCalled();
+    // Every other write tool is still registered
+    expect(registerSendTools).toHaveBeenCalled();
+    expect(registerManageTools).toHaveBeenCalled();
+    expect(registerArchiveTools).toHaveBeenCalled();
+    expect(registerLabelTools).toHaveBeenCalled();
+    expect(registerBulkTools).toHaveBeenCalled();
+    expect(registerDraftTools).toHaveBeenCalled();
+    expect(registerFolderTools).toHaveBeenCalled();
+    expect(registerTemplateWriteTools).toHaveBeenCalled();
   });
 });

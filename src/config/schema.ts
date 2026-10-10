@@ -63,6 +63,16 @@ export const WatcherConfigSchema = z.object({
   idle_timeout: z.number().int().min(60).max(1740).default(1740),
 });
 
+/**
+ * Scheduled emails are queued in the local state directory and sent by a timer
+ * in the server process (or the `email-mcp scheduler` daemon), so they need a
+ * host that keeps both. Disable it where neither lasts (e.g. scale-to-zero
+ * containers).
+ */
+export const SchedulerConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+});
+
 export const HookRuleMatchSchema = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
@@ -123,6 +133,7 @@ export const SettingsSchema = z.object({
     folders: ['INBOX'],
     idle_timeout: 1740,
   }),
+  scheduler: SchedulerConfigSchema.default({ enabled: true }),
   hooks: HooksConfigSchema.default({
     on_new_email: 'notify',
     preset: 'priority-focus',
@@ -153,6 +164,7 @@ export const AppConfigFileSchema = z.object({
       folders: ['INBOX'],
       idle_timeout: 1740,
     },
+    scheduler: { enabled: true },
     hooks: {
       on_new_email: 'notify',
       preset: 'priority-focus',

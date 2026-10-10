@@ -125,6 +125,16 @@ describe('SettingsSchema', () => {
     expect(result.rate_limit).toBe(5);
     expect(result.read_only).toBe(true);
   });
+
+  it('enables the scheduler by default', () => {
+    expect(SettingsSchema.parse({}).scheduler.enabled).toBe(true);
+    expect(SettingsSchema.parse({ scheduler: {} }).scheduler.enabled).toBe(true);
+  });
+
+  it('accepts a disabled scheduler', () => {
+    const result = SettingsSchema.parse({ scheduler: { enabled: false } });
+    expect(result.scheduler.enabled).toBe(false);
+  });
 });
 
 describe('AppConfigFileSchema', () => {
@@ -141,6 +151,7 @@ describe('AppConfigFileSchema', () => {
     const result = AppConfigFileSchema.parse({ accounts: [validAccount()] });
     expect(result.settings.rate_limit).toBe(10);
     expect(result.settings.read_only).toBe(false);
+    expect(result.settings.scheduler.enabled).toBe(true);
   });
 
   it('rejects accounts with invalid email', () => {

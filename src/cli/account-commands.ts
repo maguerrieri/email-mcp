@@ -504,6 +504,7 @@ async function addAccount(): Promise<void> {
             folders: ['INBOX'],
             idle_timeout: 1740,
           },
+          scheduler: { enabled: true },
           hooks: {
             on_new_email: 'notify',
             preset: 'priority-focus',
