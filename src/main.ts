@@ -103,7 +103,7 @@ async function runServer(): Promise<void> {
     watcherService,
     hooksService,
   );
-  registerAllResources(server, connections, imapService, templateService, schedulerService);
+  registerAllResources(server, connections, imapService, templateService, schedulerService, config);
   registerAllPrompts(server);
 
   const transport = new StdioServerTransport();
@@ -133,6 +133,8 @@ async function runServer(): Promise<void> {
         await watcherService.start();
 
         await mcpLog('info', 'server', 'Email MCP server started');
+
+        if (!config.settings.scheduler.enabled) return;
 
         // Check for overdue scheduled emails on startup
         try {

@@ -76,6 +76,11 @@ export interface WatcherConfig {
   idleTimeout: number;
 }
 
+export interface SchedulerConfig {
+  /** Serve the send-later tools and resource, and run the in-process send timer. */
+  enabled: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Hook Rules
 // ---------------------------------------------------------------------------
@@ -142,6 +147,7 @@ export interface AppConfig {
     rateLimit: number;
     readOnly: boolean;
     watcher: WatcherConfig;
+    scheduler: SchedulerConfig;
     hooks: HooksConfig;
   };
   accounts: AccountConfig[];

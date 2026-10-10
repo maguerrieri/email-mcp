@@ -3,6 +3,7 @@
  *
  * Registers all MCP tools with the server instance.
  * In read-only mode, write tools are not registered at all.
+ * With the scheduler disabled, the scheduler tools are not registered either.
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -52,7 +53,7 @@ export default function registerAllTools(
   watcherService: WatcherService,
   hooksService: HooksService,
 ): void {
-  const { readOnly } = config.settings;
+  const { readOnly, scheduler } = config.settings;
 
   // Read tools — always registered
   registerAccountsTools(server, connections);
@@ -84,6 +85,8 @@ export default function registerAllTools(
     registerDraftTools(server, imapService, smtpService);
     registerFolderTools(server, imapService);
     registerTemplateWriteTools(server, templateService, imapService, smtpService);
-    registerSchedulerTools(server, schedulerService);
+    if (scheduler.enabled) {
+      registerSchedulerTools(server, schedulerService);
+    }
   }
 }
