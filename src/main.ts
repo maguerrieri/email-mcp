@@ -26,6 +26,7 @@ import LocalCalendarService from './services/local-calendar.service.js';
 import OAuthService from './services/oauth.service.js';
 import RemindersService from './services/reminders.service.js';
 import SchedulerService from './services/scheduler.service.js';
+import startScheduler from './services/scheduler-startup.js';
 import SmtpService from './services/smtp.service.js';
 import TemplateService from './services/template.service.js';
 import WatcherService from './services/watcher.service.js';
@@ -117,7 +118,7 @@ async function runServer(): Promise<void> {
   // the real capabilities (including `sampling` support).
   // --------------------------------------------------------------------------
 
-  let schedulerInterval: ReturnType<typeof setInterval> | undefined;
+  let stopScheduler: (() => void) | undefined;
 
   const lowLevelServer = server.server;
 
@@ -134,26 +135,7 @@ async function runServer(): Promise<void> {
 
         await mcpLog('info', 'server', 'Email MCP server started');
 
-        if (!config.settings.scheduler.enabled) return;
-
-        // Check for overdue scheduled emails on startup
-        try {
-          const result = await schedulerService.checkAndSend();
-          if (result.sent > 0) {
-            await mcpLog('info', 'scheduler', `Sent ${result.sent} overdue email(s) on startup`);
-          }
-        } catch {
-          // Non-fatal: scheduler check failure shouldn't prevent server start
-        }
-
-        // Periodic scheduler check every 60 seconds
-        schedulerInterval = setInterval(async () => {
-          try {
-            await schedulerService.checkAndSend();
-          } catch {
-            // Silent — don't spam logs
-          }
-        }, 60_000);
+        stopScheduler = await startScheduler(schedulerService, config.settings.scheduler.enabled);
       } catch (err) {
         // Log to stderr — mcpLog may not be safe if init itself errored
         process.stderr.write(
@@ -165,7 +147,7 @@ async function runServer(): Promise<void> {
 
   // Graceful shutdown
   const shutdown = async () => {
-    if (schedulerInterval) clearInterval(schedulerInterval);
+    stopScheduler?.();
     hooksService.stop();
     await watcherService.stop();
     await connections.closeAll();

@@ -487,7 +487,7 @@ Scheduling assumes the queue directory and a process to send from both outlive t
 enabled = false
 ```
 
-(or `MCP_EMAIL_SCHEDULER_ENABLED=false` with environment-variable config). The server then doesn't register `schedule_email`, `list_scheduled`, `cancel_scheduled` or the `email://scheduled` resource, and doesn't run the startup check or the 60-second timer. The `email-mcp scheduler` CLI commands are unaffected.
+(or `MCP_EMAIL_SCHEDULER_ENABLED=false` with environment-variable config). The server then doesn't register `schedule_email`, `list_scheduled`, `cancel_scheduled` or the `email://scheduled` resource, and doesn't run the startup check or the 60-second timer. If emails are already queued, it logs a warning at startup instead of sending them. The `email-mcp scheduler` CLI commands don't read this setting: `email-mcp scheduler check` still sends whatever is queued, and so does an OS daemon installed with `email-mcp scheduler install` until you remove it with `email-mcp scheduler uninstall`.
 
 ### Real-time Watcher & AI Hooks
 
