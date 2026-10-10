@@ -32,7 +32,7 @@ src/
 ### Tool Registration
 - All tools registered in `src/tools/register.ts`
 - Read tools always registered; write tools skipped when `readOnly=true`
-- Scheduler tools and the `email://scheduled` resource skipped when `settings.scheduler.enabled=false` (for hosts that don't keep the process running; `main.ts` then skips the send timer too)
+- Scheduler tools and the `email://scheduled` resource skipped when `settings.scheduler.enabled=false` (for hosts that don't keep the process running; `services/scheduler-startup.ts` then skips the startup send and the 60 s timer too)
 - Each tool file exports a `registerXxxTools(server, imapService)` function
 - Tools use Zod schemas for input validation and `audit.log()` for audit trails
 
